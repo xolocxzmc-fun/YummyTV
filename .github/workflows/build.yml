@@ -32,7 +32,9 @@ jobs:
         run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/release/app-release.apk "YummyTV-1.0.${{ github.run_number }}.apk"
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk "YummyTV-1.0.${{ github.run_number }}.apk"
+          cp app/build/outputs/apk/release/app-release.apk YummyTV.apk
 
       - uses: actions/upload-artifact@v4
         with:
@@ -44,5 +46,7 @@ jobs:
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Yummy TV 1.0.${{ github.run_number }}
-          files: YummyTV-*.apk
+          files: |
+            YummyTV-*.apk
+            YummyTV.apk
           make_latest: true
