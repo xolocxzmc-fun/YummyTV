@@ -55,7 +55,8 @@
         out.push({
           video_id: a.anime_id * 1000 + vid++, number: String(e), date: 1700000000, duration: 1420,
           data: { player: c[0], dubbing: c[1] },
-          iframe_url: /Kodik/.test(c[0]) ? '//kodikplayer.com/seria/' + a.anime_id + '/' + e + '/720p?episode=' + e : '//alloha.yani.tv/?ep=' + e,
+          iframe_url: /Kodik/.test(c[0]) ? '//kodikplayer.com/seria/' + a.anime_id + '/' + e + '/720p?episode=' + e
+            : /CVH/.test(c[0]) ? '//ru.yummyani.me/iframeCVH.html?ep=' + e : '//alloha.yani.tv/?ep=' + e,
           skips: { opening: { time: 30, length: 85 }, ending: { time: 1300, length: 90 } }
         });
       }

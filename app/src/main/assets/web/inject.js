@@ -185,6 +185,36 @@
     } catch (e) {}
   }
 
+  // Player-side errors ("Упс. Ошибка! … Перезагрузить плеер"): press the player's own retry button,
+  // and tell the app when retrying didn't help so it can switch to another player.
+  var RELOAD_RE = /^\s*(перезагрузить(\s+плеер)?|повторить(\s+попытку)?|обновить|retry|reload|try again)\s*$/i;
+  var errTries = 0, errLast = 0, errReported = false;
+  function checkError() {
+    var v = mainVideo();
+    if (v && v.currentTime > 0.5) { errTries = 0; return; }
+    var now = Date.now();
+    if (now - errLast < 2500) return;
+    var els = document.querySelectorAll('button, a, div, span');
+    for (var i = 0; i < els.length && i < 4000; i++) {
+      var el = els[i];
+      if (el.children.length > 2) continue;
+      var t = el.textContent;
+      if (!t || t.length > 30 || !RELOAD_RE.test(t)) continue;
+      var r = el.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4) continue;
+      errLast = now;
+      if (errTries < 1) {
+        errTries++;
+        fire(el);
+        try { window.top.postMessage({ tvp: 'perror', tries: errTries }, '*'); } catch (e) {}
+      } else if (!errReported) {
+        errReported = true;
+        try { window.top.postMessage({ tvp: 'perror', fatal: true }, '*'); } catch (e) {}
+      }
+      return;
+    }
+  }
+
   function forward(msg) {
     for (var i = 0; i < window.frames.length; i++) {
       try { window.frames[i].postMessage(msg, '*'); } catch (e) {}
@@ -287,5 +317,6 @@
     var mv = mainVideo();
     if (cfg.adblock && (!mv || !(mv.duration > 180))) clickSkipAd();
     keepClean();
+    checkError();
   }, 700);
 })();

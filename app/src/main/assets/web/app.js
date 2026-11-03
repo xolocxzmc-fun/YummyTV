@@ -1526,6 +1526,7 @@ var Player = {
   },
   start: function (a, dubs, dub, player, idx) {
     this.a = a; this.dubs = dubs; this.dub = dub; this.player = player; this.idx = idx; this.raw = null;
+    this.failed = {};
     this.show();
     this.loadEp();
   },
@@ -1584,11 +1585,11 @@ var Player = {
       self.timers.push(setTimeout(function () { if (!self.got) self.kick(ms === 4000 || ms === 8500); }, ms));
     });
     this.timers.push(setTimeout(function () {
-      if (!self.got) {
+      if (!self.got && !self.autoFallback()) {
         self.load.classList.add('done');
-        toast('Видео не запускается? Нажмите ↓ → «Плеер» и выберите другой', 6000);
+        toast('Видео не запускается. Нажмите ↓ и выберите другую озвучку', 6000);
       }
-    }, 12000));
+    }, 14000));
   },
   loadEp: function (forceT) {
     var v = this.cur(), h = Hist.get(this.a.anime_id);
@@ -1650,6 +1651,10 @@ var Player = {
       try { d = JSON.parse(d); } catch (x) { return; }
     }
     if (!d || typeof d !== 'object') return;
+    if (d.tvp === 'perror') {
+      if (d.fatal && !this.got) this.autoFallback();
+      return;
+    }
     if (d.tvp === 'qlist') {
       var changed = (d.list || []).join() !== (this.qlist || []).join() || (d.cur && d.cur !== this.qcur);
       if (d.cur) this.qcur = d.cur;
@@ -1716,6 +1721,25 @@ var Player = {
     if (!this.ended && (ended || (this.d > 60 && t >= this.d - 1.2 && this.got))) { this.ended = true; this.onEnded(); }
     this.renderBar();
     this.saveProg();
+  },
+  // The current player failed to start: switch to the next player that has this episode,
+  // from the same moment. Returns false when there is nothing to switch to.
+  autoFallback: function () {
+    if (this.raw || !this.a || this.got) return false;
+    var num = this.cur().number, from = this.player, d = this.dub, self = this;
+    this.failed = this.failed || {};
+    this.failed[from] = true;
+    var next = d.order.filter(function (pn) {
+      return !self.failed[pn] && d.players[pn].some(function (v) { return v.number === num; });
+    })[0];
+    if (!next) return false;
+    var list = d.players[next], idx = 0;
+    for (var i = 0; i < list.length; i++) if (list[i].number === num) { idx = i; break; }
+    var t = this.resumeAt || this.t;
+    this.player = next; this.idx = idx;
+    toast(shortPlayer(from) + ' не отвечает — включил ' + shortPlayer(next));
+    this.loadEp(t > 5 ? t : null);
+    return true;
   },
   // Players start at a low quality (Kodik: 360p). Pick the preferred one from the player's own menu.
   applyQuality: function () {
@@ -2024,6 +2048,7 @@ var Player = {
     $$('[data-p]', this.sheetRow).forEach(function (o) {
       o._ok = function () {
         var pn = o.getAttribute('data-p'), num = self.cur().number, t = self.t, list = self.dub.players[pn], idx = 0;
+        if (self.failed) delete self.failed[pn];
         for (var i = 0; i < list.length; i++) if (list[i].number === num) { idx = i; break; }
         self.persist();
         self.player = pn; self.idx = idx;

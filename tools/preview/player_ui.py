@@ -52,12 +52,12 @@ async def main():
         print('after back x2: controls open =', await pg.evaluate("__ytv.Player.panelOpen"), ' player open =', await pg.evaluate("__ytv.Player.open"))
         # non-kodik player: quality list comes from inside the player
         await k('ok'); await pg.wait_for_timeout(2500)   # reopen player from the anime page
-        await pg.evaluate("__ytv.Player.openPanel('player')"); await k('right'); await k('ok'); await pg.wait_for_timeout(3000)
+        await pg.evaluate("__ytv.Player.openPanel('player')"); await k('right'); await k('right'); await k('ok'); await pg.wait_for_timeout(3000)
         print('player now:', await pg.evaluate("__ytv.Player.player"))
         await pg.evaluate("__ytv.Player.openPanel('quality')"); await pg.wait_for_timeout(800)
         print('qualities from inside player:', await pg.evaluate("[...document.querySelectorAll('.sheet-row .chip2')].map(e=>e.textContent)"))
         await k('ok'); await pg.wait_for_timeout(300)
-        fr2 = [f for f in pg.frames if 'alloha' in f.url][0]
+        fr2 = [f for f in pg.frames if 'iframeCVH' in f.url][0]
         print('picked inside second player:', await fr2.evaluate("window.__q"))
         print('errors:', errs)
         await b.close()
