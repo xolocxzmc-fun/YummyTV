@@ -30,7 +30,7 @@ async def main():
         pg = await ctx.new_page(); PAGE = pg
         errs = []
         pg.on('pageerror', lambda e: errs.append(str(e)))
-        k = lambda key, rep=0: pg.evaluate("([k,r])=>tvKey(k,r)", [key, rep])
+        k = lambda key, rep=0: pg.evaluate("([k,r])=>{tvKey(k,r); if(!r) tvKeyUp(k)}", [key, rep])
         st = lambda: pg.evaluate(STATE)
         await pg.goto('https://old.yummyani.me/tvapp/index.html'); await pg.wait_for_timeout(2500)
 
@@ -82,7 +82,7 @@ async def main():
         await pg.evaluate("__ytv.Router.push('anime',{url:'frieren'})"); await pg.wait_for_timeout(2500)
         for i in range(14):
             ok = await pg.evaluate("""(()=>{const c=document.querySelector('.screen:not(.off) .rec .card, .screen:not(.off) .more .card');
-                if(!c) return false; __ytv.Nav.focus(c); tvKey('ok',0); return true})()""")
+                if(!c) return false; __ytv.Nav.focus(c); tvKey('ok',0); tvKeyUp('ok'); return true})()""")
             await pg.wait_for_timeout(1500)
             for _ in range(20):
                 if await pg.evaluate("!!document.querySelector('.screen:not(.off) .rec .card')"): break
@@ -114,6 +114,24 @@ async def main():
         await pg.wait_for_timeout(400)
         s11 = await st(); modal = await pg.evaluate("!document.getElementById('modal').hidden")
         check('back storm closes modal and lands safely', not modal and s11['cur'] is not None, s11)
+        # 9. long press OK on a "continue watching" card -> menu -> remove; clear tile -> confirm
+        await pg.evaluate("__ytv.Router.root('home')"); await pg.wait_for_timeout(2500)
+        n0 = await pg.evaluate("[...document.querySelectorAll('.rows .sec')].filter(x=>x.querySelector('h2').textContent==='Продолжить просмотр').map(x=>x.querySelectorAll('.card').length)[0]||0")
+        await pg.evaluate("(()=>{const c=document.querySelector('.rows .sec:first-child .card'); __ytv.Nav.focus(c)})()")
+        await pg.evaluate("tvKey('ok',0)"); await pg.wait_for_timeout(300); await pg.evaluate("tvKey('ok',1)"); await pg.wait_for_timeout(300)
+        await pg.evaluate("tvKey('ok',2)"); await pg.evaluate("tvKeyUp('ok')"); await pg.wait_for_timeout(300)
+        opts = await pg.evaluate("[...document.querySelectorAll('#modal .opt')].map(e=>e.textContent)")
+        check('long press opens the actions menu', 'Убрать из «Продолжить просмотр»' in opts, opts)
+        idx = opts.index('Убрать из «Продолжить просмотр»') if 'Убрать из «Продолжить просмотр»' in opts else 0
+        for _ in range(idx): await k('down')
+        await k('ok'); await pg.wait_for_timeout(400)
+        n1 = await pg.evaluate("[...document.querySelectorAll('.rows .sec')].filter(x=>x.querySelector('h2').textContent==='Продолжить просмотр').map(x=>x.querySelectorAll('.card').length)[0]||0")
+        st9 = await st()
+        check('title removed, focus stays in the row', n1 == n0 - 1 and st9['cur'] and 'card' in st9['cur'], (n0, n1, st9['cur']))
+        await pg.evaluate("__ytv.Nav.focus(document.querySelector('.rows .cclear'))"); await k('ok'); await pg.wait_for_timeout(200)
+        await k('left'); await k('ok'); await pg.wait_for_timeout(400)
+        left = await pg.evaluate("[...document.querySelectorAll('.rows h2')].map(h=>h.textContent)")
+        check('clear tile empties «Продолжить просмотр»', 'Продолжить просмотр' not in left and (await st())['cur'] is not None, left[:3])
         check('no JS errors', not errs, errs[:3])
         print('\n%d/%d passed' % (sum(1 for r in results if r[1]), len(results)))
         await b.close()

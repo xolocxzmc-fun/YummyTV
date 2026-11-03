@@ -89,6 +89,10 @@ h2 small { color: var(--mu); font-weight: 400; font-size: 1rem; margin-left: .6r
 .tile span { color: var(--mu); font-size: .85rem; }
 .tile.fx { background: var(--tx); color: var(--bg); transform: scale(1.04); }
 .tile.fx span { color: #45465a; }
+.cclear { width: 9.5rem; height: 13.4rem; margin-right: 1.1rem; border-radius: .6rem; background: var(--s1); color: var(--mu); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center; font-size: .95rem; line-height: 1.3; white-space: normal; transition: background var(--t), color var(--t), transform var(--t); }
+.cclear svg { width: 2rem; height: 2rem; margin-bottom: .7rem; }
+.cclear.fx { background: var(--tx); color: var(--bg); transform: scale(1.05); }
 
 /* grids */
 .grid { display: flex; flex-wrap: wrap; padding: .9rem 2.5rem 1rem; }
@@ -209,9 +213,10 @@ h2 small { color: var(--mu); font-weight: 400; font-size: 1rem; margin-left: .6r
 .mtext { font-size: 1.05rem; line-height: 1.55; color: #d6d6de; overflow: hidden; }
 
 /* ---------------------------------------------------------------- toast */
-#toast { position: fixed; left: 50%; bottom: 2.5rem; transform: translate(-50%, 1rem); background: var(--tx); color: var(--bg); padding: .8rem 1.4rem;
-  border-radius: 1.5rem; font-size: 1rem; font-weight: 500; opacity: 0; z-index: 90; transition: opacity .2s, transform .2s; white-space: nowrap; }
-#toast.show { opacity: 1; transform: translate(-50%, 0); }
+#toast { position: fixed; right: 2rem; top: 1.8rem; max-width: 30rem; background: rgba(28,29,38,.97); color: var(--tx); padding: .9rem 1.3rem;
+  border-radius: .8rem; font-size: 1rem; font-weight: 500; line-height: 1.35; opacity: 0; z-index: 90; transform: translateX(120%);
+  transition: opacity .2s, transform .25s ease-out; box-shadow: 0 .6rem 2rem rgba(0,0,0,.45); border-left: .3rem solid var(--acc); }
+#toast.show { opacity: 1; transform: none; }
 
 /* ---------------------------------------------------------------- player */
 #player { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: #000; z-index: 40; }

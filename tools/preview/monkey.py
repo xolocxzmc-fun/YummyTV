@@ -82,7 +82,7 @@ async def main():
                 await pg.evaluate("tvLowMemory()")
             if rnd.random() < 0.02 and not (await pg.evaluate("__ytv.Player.open")):
                 await pg.evaluate("v => __ytv.Router.root(v)", rnd.choice(['home', 'search', 'catalog', 'schedule', 'my', 'settings']))
-            dt = await pg.evaluate("([k,r,c])=>{const t=performance.now();tvKey(k,r,c);return performance.now()-t}", [k, rep, ch])
+            dt = await pg.evaluate("([k,r,c])=>{const t=performance.now();tvKey(k,r,c);if(!r)tvKeyUp(k);return performance.now()-t}", [k, rep, ch])
             maxk = max(maxk, dt); slow += dt > 50
             await pg.wait_for_timeout(rnd.choice([20, 40, 60, 80, 120, 250, 600, 1500]))
             st = await pg.evaluate(INV)

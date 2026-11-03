@@ -67,7 +67,7 @@ async def main():
         await pg.wait_for_timeout(900)
         async def key(k, n=1, wait=180):
             for _ in range(n):
-                await pg.evaluate(f"tvKey('{k}',0)")
+                await pg.evaluate(f"tvKey('{k}',0);tvKeyUp('{k}')")
                 await pg.wait_for_timeout(wait)
         async def shot(name, wait=450):
             await pg.wait_for_timeout(wait)

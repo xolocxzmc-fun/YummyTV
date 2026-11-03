@@ -11,7 +11,7 @@ async def main():
         await ctx.add_init_script(path=R.WEB + '/inject.js')
         pg = await ctx.new_page(); errs = []
         pg.on('pageerror', lambda e: errs.append(str(e)))
-        k = lambda key: pg.evaluate("k=>tvKey(k,0)", key)
+        k = lambda key: pg.evaluate("k=>{tvKey(k,0);tvKeyUp(k)}", key)
         await pg.goto('https://old.yummyani.me/tvapp/index.html'); await pg.wait_for_timeout(800)
         await pg.evaluate("__ytv.Router.push('anime',{url:'velikiy-pritvorschik'})"); await pg.wait_for_timeout(800)
         await k('ok'); await pg.wait_for_timeout(5000)
@@ -22,6 +22,7 @@ async def main():
         fr = [f for f in pg.frames if 'kodik' in f.url][0]
         red = await fr.evaluate("getComputedStyle(document.querySelector('.native-controls')).visibility")
         print('native UI visibility while paused:', red)
+        print('video pinned above player UI:', await fr.evaluate("(()=>{const v=document.querySelector('video');const e=document.elementFromPoint(innerWidth-30, innerHeight-30);return getComputedStyle(v).position+' / top element at bottom-right: '+(e&&e.tagName)})()"))
         await k('ok'); await pg.wait_for_timeout(500)
         await k('down'); await pg.wait_for_timeout(400)
         print('focused after down:', await pg.evaluate("__ytv.Nav.cur.getAttribute('data-b')"))

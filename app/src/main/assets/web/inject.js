@@ -45,13 +45,45 @@
     '[class*="caption"],[class*="caption"] *,[class*="text-track"],[class*="text-track"] *,[class*="cue"],[class*="cue"] *,' +
     '[id*="subtitle"],[id*="subtitle"] *{visibility:visible!important}' +
     'video::-webkit-media-controls{display:none!important}';
-  var cleanEl = null;
+  var cleanEl = null, pinned = null;
   function setClean(on) {
     try {
       if (on && !cleanEl) {
         cleanEl = addStyle(CLEAN_CSS);
-      } else if (!on && cleanEl) { cleanEl.remove(); cleanEl = null; }
+      } else if (!on && cleanEl) { cleanEl.remove(); cleanEl = null; unpin(); }
     } catch (e) {}
+  }
+  // Belt and braces: whatever the player's markup, lift the picture above everything else in the frame,
+  // full screen. Player buttons, spinners and pop-ups end up underneath it.
+  var PIN = { position: 'fixed', left: '0', top: '0', right: 'auto', bottom: 'auto', width: '100vw', height: '100vh',
+    'max-width': 'none', 'max-height': 'none', margin: '0', 'z-index': '2147483647', 'object-fit': 'contain',
+    background: '#000', visibility: 'visible', opacity: '1', display: 'block', border: '0' };
+  function pin(el) {
+    if (pinned === el) return;
+    unpin();
+    pinned = el;
+    for (var k in PIN) el.style.setProperty(k, PIN[k], 'important');
+    try { el.controls = false; } catch (e) {}
+  }
+  function unpin() {
+    if (!pinned) return;
+    for (var k in PIN) pinned.style.removeProperty(k);
+    pinned = null;
+  }
+  function biggestFrame() {
+    var fs = document.getElementsByTagName('iframe'), best = null, ba = 0;
+    for (var i = 0; i < fs.length; i++) {
+      var r = fs[i].getBoundingClientRect(), a = r.width * r.height;
+      if (a > ba) { ba = a; best = fs[i]; }
+    }
+    return ba > 40000 ? best : null;
+  }
+  function keepClean() {
+    if (!cleanEl) return;
+    if (!cleanEl.isConnected) { var root = document.head || document.documentElement; if (root) root.appendChild(cleanEl); }
+    var v = mainVideo();
+    if (v && (v.readyState > 0 || v.currentTime > 0)) pin(v);
+    else if (!v) { var f = biggestFrame(); if (f) pin(f); }
   }
   setClean(true);
 
@@ -245,6 +277,7 @@
       v.addEventListener(t, function () { status(true); });
     });
     v.addEventListener('timeupdate', function () { status(false); });
+    v.addEventListener('playing', keepClean);
   }
 
   setInterval(function () {
@@ -253,5 +286,6 @@
     // Only look for a "skip ad" button while no full-length episode is playing.
     var mv = mainVideo();
     if (cfg.adblock && (!mv || !(mv.duration > 180))) clickSkipAd();
-  }, 1000);
+    keepClean();
+  }, 700);
 })();

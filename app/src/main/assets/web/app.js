@@ -64,6 +64,7 @@ var ICON = {
   next: '<svg viewBox="0 0 24 24"><path d="M16.5 4H19v16h-2.5zM4 4l11 8-11 8z" fill="currentColor" stroke="none"/></svg>',
   list: '<svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
   hd: '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9v6M10 9v6M6 12h4M14 9v6h2a3 3 0 0 0 0-6z"/></svg>',
+  trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3"/></svg>',
   dots: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg>'
 };
 
@@ -252,6 +253,7 @@ var Hist = {
     e.poster = poster(a) || e.poster;
     if (a.year) e.year = a.year;
     Object.assign(e, patch);
+    e.hidden = false;
     e.ts = Date.now();
     this.data[id] = e;
     this.trim();
@@ -265,8 +267,12 @@ var Hist = {
       .filter(function (e) { return e.ep; })
       .sort(function (a, b) { return b.ts - a.ts; });
   },
+  visible: function () { return this.list().filter(function (e) { return !e.hidden; }); },
+  hide: function (id) { var e = this.data[id]; if (e) { e.hidden = true; store.set('hist', this.data); } },
+  hideAll: function () { var self = this; Object.keys(this.data).forEach(function (k) { self.data[k].hidden = true; }); store.set('hist', this.data); },
   trim: function () {
     var l = this.list();
+    // (hidden entries still count: they keep watched marks)
     if (l.length > 300) { var self = this; l.slice(300).forEach(function (e) { delete self.data[e.id]; }); }
   },
   save: debounce(function () { store.set('hist', Hist.data); }, 500),
@@ -286,7 +292,9 @@ var Favs = {
   list: function () {
     var self = this;
     return Object.keys(this.data).map(function (k) { return self.data[k]; }).sort(function (a, b) { return b.ts - a.ts; });
-  }
+  },
+  remove: function (id) { delete this.data[id]; store.set('favs', this.data); },
+  clear: function () { this.data = {}; store.set('favs', {}); }
 };
 
 function fromStored(e) {
@@ -674,7 +682,15 @@ var Acts = {
     if (v === 'random') { openRandom(); return; }
     Router.root(v);
   },
-  coll: function (el) { Router.push('collection', { id: el.getAttribute('data-id'), title: el.getAttribute('data-title') }); }
+  coll: function (el) { Router.push('collection', { id: el.getAttribute('data-id'), title: el.getAttribute('data-title') }); },
+  clearhist: function () {
+    confirmBox('Очистить «Продолжить просмотр»? Отметки о просмотренных сериях сохранятся.', 'Очистить', function () {
+      Hist.hideAll(); toast('Список очищен'); refreshLocal();
+    });
+  },
+  clearfavs: function () {
+    confirmBox('Очистить избранное?', 'Очистить', function () { Favs.clear(); toast('Избранное очищено'); refreshLocal(); });
+  }
 };
 function activate(el) {
   if (!el) return;
@@ -768,6 +784,57 @@ function chooseDefault(dubs, h) {
   return { dub: d, player: pl };
 }
 
+function clearTile(act) {
+  return '<div class="cclear f" data-act="' + act + '">' + ICON.trash + '<span>Очистить<br>список</span></div>';
+}
+// Re-draw "my lists" wherever they are shown, keeping focus on the same row / position.
+function refreshLocal() {
+  var v = Router.top();
+  if (!v) return;
+  var cur = Nav.cur && v.el.contains(Nav.cur) ? Nav.cur : null;
+  var sec = cur && cur.closest('.sec'), h = sec && $('h2', sec);
+  var title = h ? h.textContent.replace(/\s*\d+$/, '') : null;
+  var row = cur && cur.closest('[data-nav]'), idx = row ? Nav.items(row).indexOf(cur) : 0;
+  if (v.view.onResume) v.view.onResume();
+  var target = null;
+  if (title) {
+    var hh = $$('h2', v.el).filter(function (x) { return x.textContent.replace(/\s*\d+$/, '').indexOf(title) === 0; })[0];
+    if (hh) { var it = Nav.items($('[data-nav]', hh.parentNode)).filter(function (x) { return x.classList.contains('card'); }); target = it[Math.min(idx, it.length - 1)]; }
+  }
+  Nav.focus(target || Nav.first(v.el) || $('#side .si.cur'));
+}
+function inFavRow(el) {
+  var sec = el.closest('.sec'), h = sec && $('h2', sec);
+  return !!(h && h.textContent.indexOf('Избранное') === 0);
+}
+function contextMenu(el) {
+  if (!el || !el.classList.contains('card')) return;
+  var id = +el.getAttribute('data-id'), url = el.getAttribute('data-url');
+  var a = Pool.get(id) || { anime_id: id, anime_url: url, title: $('.ct', el) ? $('.ct', el).textContent : '' };
+  var opts = [];
+  var isResume = el.getAttribute('data-act') === 'resume';
+  if (isResume) opts.push({ v: 'play', t: 'Продолжить просмотр' });
+  opts.push({ v: 'open', t: 'Описание и серии' });
+  if (isResume) {
+    opts.push({ v: 'hide', t: 'Убрать из «Продолжить просмотр»' });
+    opts.push({ v: 'hideall', t: 'Очистить весь список' });
+  }
+  if (Favs.has(id)) opts.push({ v: 'unfav', t: 'Убрать из избранного' });
+  else opts.push({ v: 'fav', t: 'Добавить в избранное' });
+  if (inFavRow(el)) opts.push({ v: 'clearfavs', t: 'Очистить избранное' });
+  pick(a.title || 'Аниме', opts, {
+    onPick: function (v) {
+      if (v === 'play') resumeAnime(id, url);
+      else if (v === 'open') Router.push('anime', { id: id, url: url });
+      else if (v === 'hide') { Hist.hide(id); toast('Убрано из «Продолжить просмотр»'); refreshLocal(); }
+      else if (v === 'hideall') Acts.clearhist();
+      else if (v === 'unfav') { Favs.remove(id); toast('Убрано из избранного'); refreshLocal(); }
+      else if (v === 'fav') { Favs.toggle(a); toast('Добавлено в избранное'); refreshLocal(); }
+      else if (v === 'clearfavs') Acts.clearfavs();
+    }
+  });
+}
+
 // ============================================================ views
 var Views = {};
 
@@ -832,13 +899,13 @@ Views.home = {
     replaceKeepingFocus(rows, html, this.entry);
   },
   localRows: function () {
-    var html = '', h = Hist.list().slice(0, 20), fav = Favs.list().slice(0, 30);
+    var html = '', h = Hist.visible().slice(0, 20), fav = Favs.list().slice(0, 30);
     if (h.length) {
       html += section('Продолжить просмотр', h.map(function (e) {
         return card(fromStored(e), { act: 'resume', sub: 'Серия ' + e.ep + (e.d ? ' · ' + fmtT(e.t) + ' из ' + fmtT(e.d) : ''), prog: e.d ? e.t / e.d : 0 });
-      }).join(''));
+      }).join('') + clearTile('clearhist'));
     }
-    if (fav.length) html += section('Избранное', fav.map(function (e) { return card(fromStored(e), { sub: [e.year, e.type].filter(Boolean).join(' · ') }); }).join(''));
+    if (fav.length) html += section('Избранное', fav.map(function (e) { return card(fromStored(e), { sub: [e.year, e.type].filter(Boolean).join(' · ') }); }).join('') + clearTile('clearfavs'));
     return html;
   },
   onFocus: function (el) {
@@ -1348,17 +1415,17 @@ Views.schedule = {
 Views.my = {
   render: function (el) {
     el.classList.add('vs');
-    var h = Hist.list(), f = Favs.list(), html = '<div class="pad" data-top style="padding-bottom:0"><h1>Моё</h1></div>';
+    var h = Hist.visible(), f = Favs.list(), html = '<div class="pad" data-top style="padding-bottom:0"><h1>Моё</h1></div>';
     if (h.length) {
       html += '<section class="sec"><h2>История просмотра <small>' + h.length + '</small></h2><div class="grid" data-nav="grid">' + h.map(function (e) {
         return card(fromStored(e), { act: 'resume', sub: 'Серия ' + e.ep + (e.d ? ' · ' + fmtT(e.t) : ''), prog: e.d ? e.t / e.d : 0 });
-      }).join('') + '</div></section>';
+      }).join('') + clearTile('clearhist') + '</div></section>';
     }
     if (f.length) {
       html += '<section class="sec"><h2>Избранное <small>' + f.length + '</small></h2><div class="grid" data-nav="grid">' +
-        f.map(function (e) { return card(fromStored(e), { sub: [e.year, e.type].filter(Boolean).join(' · ') }); }).join('') + '</div></section>';
+        f.map(function (e) { return card(fromStored(e), { sub: [e.year, e.type].filter(Boolean).join(' · ') }); }).join('') + clearTile('clearfavs') + '</div></section>';
     }
-    if (!h.length && !f.length) html += '<div class="noeps">Здесь появятся аниме, которые вы смотрите, и ваше избранное.<br>Подсказка: на карточке нажмите «Меню» на пульте, чтобы открыть описание.</div>';
+    if (!h.length && !f.length) html += '<div class="noeps">Здесь появятся аниме, которые вы смотрите, и ваше избранное.</div>';
     el.innerHTML = html;
   },
   onResume: function () { var keep = this.el.scrollTop; this.render(this.el); this.el.scrollTop = keep; }
@@ -2036,6 +2103,7 @@ window.tvKey = function (k, rep, ch) {
   }
 };
 function handleKey(k, rep, ch) {
+  if (k !== 'ok' && okHold) { clearTimeout(okHold.timer); okHold = null; }
   if (!rep && k !== 'up' && k !== 'down' && k !== 'left' && k !== 'right') intent++;
   if (Player.open && !Modal.open) { Player.key(k, rep); return; }
   if (!Player.open && !Modal.open && (!Nav.cur || !document.body.contains(Nav.cur) || Nav.cur.closest('.off'))) {
@@ -2054,13 +2122,25 @@ function handleKey(k, rep, ch) {
       lastMove = now;
       Nav.move(k);
       break;
-    case 'ok': if (!rep) activate(Nav.cur); break;
+    case 'ok':
+      var c = Nav.cur;
+      if (Modal.open || !c || !c.classList.contains('card')) { if (!rep) activate(c); break; }
+      if (!rep) {
+        // Cards: short press opens, long press (hold) shows the actions menu.
+        okHold = { el: c, t: Date.now(), fired: false };
+        clearTimeout(okHold.timer);
+        okHold.timer = setTimeout(function () { // key-up never came (shouldn't happen) → treat as a click
+          if (okHold && !okHold.fired && !okHold.repeated) { var e = okHold.el; okHold = null; activate(e); }
+        }, 1200);
+      } else if (okHold && !okHold.fired) {
+        okHold.repeated = true;
+        if (Date.now() - okHold.t > 500) { okHold.fired = true; contextMenu(okHold.el); }
+      }
+      break;
     case 'back': if (!rep) onBack(); break;
     case 'menu': case 'info':
       if (rep) return;
-      if (Nav.cur && Nav.cur.classList.contains('card') && !Modal.open) {
-        Router.push('anime', { id: Nav.cur.getAttribute('data-id'), url: Nav.cur.getAttribute('data-url') });
-      }
+      if (Nav.cur && Nav.cur.classList.contains('card') && !Modal.open) contextMenu(Nav.cur);
       break;
     case 'search': if (!rep && !Modal.open) Router.root('search'); break;
     case 'char': case 'del': case 'space':
@@ -2069,7 +2149,15 @@ function handleKey(k, rep, ch) {
       break;
   }
 }
-window.tvKeyUp = function () {};
+var okHold = null;
+window.tvKeyUp = function (k) {
+  if (k !== 'ok' || !okHold) return;
+  var h = okHold;
+  okHold = null;
+  clearTimeout(h.timer);
+  if (h.fired || Player.open) return;
+  if (Date.now() - h.t > 500) contextMenu(h.el); else activate(h.el);
+};
 window.tvLifecycle = function (s) {
   if (s === 'pause') { if (Player.open) Player.persist(); Hist.save.flush(); }
 };
@@ -2086,6 +2174,7 @@ if (!BRIDGE) {
     reps[k] = e.repeat ? (reps[k] || 0) + 1 : 0;
     tvKey(k, reps[k]);
   });
+  document.addEventListener('keyup', function (e) { var k = MAP[e.key]; if (k) tvKeyUp(k); });
   document.addEventListener('click', function (e) {
     var f = e.target.closest && e.target.closest('.f');
     if (f) { Nav.focus(f); activate(f); }
