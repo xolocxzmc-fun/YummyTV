@@ -49,7 +49,7 @@ async def main():
         # 2. switch dubbing mid-episode (past the first 10 s), then next episode keeps the new dub
         await k('right'); await k('right', 1); await pg.wait_for_timeout(2500)
         await pg.evaluate("__ytv.Player.openPanel('dub')"); await pg.wait_for_timeout(200)
-        await k('down'); await k('ok'); await pg.wait_for_timeout(2500)
+        await k('right'); await k('ok'); await pg.wait_for_timeout(2500)
         s2 = await st(); check('dub switched, same episode', s2['dub'] == 'Озвучка AniDUB' and s2['ep'] == '8', s2)
         check('dub switch continued from the same second', s2['t'] > 15, s2['t'])
         await k('next'); await pg.wait_for_timeout(2500)

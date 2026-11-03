@@ -45,12 +45,12 @@ var store = {
   set: function (k, v) { try { localStorage.setItem('ytv.' + k, JSON.stringify(v)); } catch (e) {} }
 };
 
-var S = Object.assign({ autoNext: true, skipOp: false, anim: true, scale: 1, player: 'auto', lastDub: '' }, store.get('settings', {}));
+var S = Object.assign({ autoNext: true, skipOp: false, anim: true, scale: 1, player: 'auto', lastDub: '', quality: 'auto', clean: true }, store.get('settings', {}));
 function saveS() { store.set('settings', S); }
 
 var ICON = {
-  play: '<svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>',
-  pause: '<svg viewBox="0 0 24 24"><path d="M7 4h4v16H7zM13 4h4v16h-4z" fill="currentColor"/></svg>',
+  play: '<svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor" stroke="none"/></svg>',
+  pause: '<svg viewBox="0 0 24 24"><path d="M6 4h4.5v16H6zM13.5 4H18v16h-4.5z" fill="currentColor" stroke="none"/></svg>',
   star: '<svg viewBox="0 0 24 24"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></svg>',
   mic: '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
   search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>',
@@ -59,7 +59,12 @@ var ICON = {
   film: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></svg>',
   text: '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
   mic2: '<svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM19 11a7 7 0 0 1-14 0M12 18v3"/></svg>',
-  tv: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
+  tv: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
+  prev: '<svg viewBox="0 0 24 24"><path d="M5 4h2.5v16H5zM20 4L9 12l11 8z" fill="currentColor" stroke="none"/></svg>',
+  next: '<svg viewBox="0 0 24 24"><path d="M16.5 4H19v16h-2.5zM4 4l11 8-11 8z" fill="currentColor" stroke="none"/></svg>',
+  list: '<svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+  hd: '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9v6M10 9v6M6 12h4M14 9v6h2a3 3 0 0 0 0-6z"/></svg>',
+  dots: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg>'
 };
 
 var toastT = null;
@@ -318,7 +323,7 @@ var Nav = {
   cur: null,
   layer: function () {
     if (Modal.open) return Modal.el;
-    if (Player.open) return Player.panelOpen ? Player.panel : null;
+    if (Player.open) return Player.panelOpen ? Player.ctrlEl : null;
     return document.getElementById('app');
   },
   items: function (c) {
@@ -1372,6 +1377,8 @@ Views.settings = {
       ['skipOp', 'Сразу пропускать опенинг', S.skipOp ? 'Вкл' : 'Выкл'],
       ['adblock', 'Блокировать рекламу в плеерах', ad ? 'Вкл' : 'Выкл'],
       ['player', 'Предпочитаемый плеер', S.player === 'auto' ? 'Авто (Kodik)' : S.player],
+      ['quality', 'Качество видео (Kodik)', S.quality === 'auto' ? 'Авто' : S.quality + 'p'],
+      ['clean', 'Скрывать интерфейс встроенного плеера', S.clean ? 'Вкл' : 'Выкл'],
       ['scale', 'Размер интерфейса', Math.round(S.scale * 100) + '%'],
       ['anim', 'Анимации и плавная прокрутка', S.anim ? 'Вкл' : 'Выкл'],
       ['hist', 'Очистить историю просмотра', ''],
@@ -1387,7 +1394,12 @@ Views.settings = {
   toggle: function (x) {
     var self = this;
     function rerender() { var k = x; self.render(self.el); Nav.focus($('[data-x="' + k + '"]', self.el)); }
-    if (x === 'autoNext' || x === 'skipOp' || x === 'anim') {
+    if (x === 'quality') {
+      pick('Качество видео', [['auto', 'Авто'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['360', '360p']].map(function (o) { return { v: o[0], t: o[1] }; }),
+        { selected: [S.quality], checks: true, onPick: function (v) { S.quality = v; saveS(); rerender(); } });
+      return;
+    }
+    if (x === 'autoNext' || x === 'skipOp' || x === 'anim' || x === 'clean') {
       S[x] = !S[x]; saveS(); applyScale(); rerender();
     } else if (x === 'adblock') {
       if (BRIDGE) BRIDGE.setAdblock(!BRIDGE.isAdblock());
@@ -1419,7 +1431,23 @@ var Player = {
     this.load = $('.p-load', this.el);
     this.skipEl = $('.skip', this.el);
     this.cd = $('.countdown', this.el);
-    this.panel = $('.panel', this.el);
+    this.ctrlEl = $('.osd-bot', this.el);
+    this.sheet = $('.sheet', this.el);
+    this.sheetRow = $('.sheet-row', this.el);
+    this.btns = $('.pbtns', this.el);
+    var selfp = this;
+    var barRow = $('.osd-row', this.el);
+    barRow._edge = function (dir) {
+      if (dir === 'left' || dir === 'right') {
+        var r = selfp.lastRep || 0, st = r < 6 ? 10 : r < 20 ? 30 : 60;
+        selfp.seekBy(dir === 'left' ? -st : st);
+        return true;
+      }
+      return false;
+    };
+    $('.bar', this.el)._ok = function () { selfp.toggle(); };
+    this.sheetRow._edge = function (dir) { return dir === 'left' || dir === 'right'; };
+    this.btns._edge = function (dir) { return dir === 'left' || dir === 'right' || dir === 'down'; };
     this.fill = $('.bar-fill', this.el);
     this.knob = $('.bar-knob', this.el);
     this.bufEl = $('.p-buf', this.el);
@@ -1438,6 +1466,7 @@ var Player = {
     this.a = null; this.raw = { url: url, title: title };
     this.show();
     this.mount(url);
+    this.renderButtons();
     $('.osd-title', this.el).textContent = title;
     $('.osd-sub', this.el).textContent = '';
   },
@@ -1470,7 +1499,7 @@ var Player = {
     f.src = url;
     var self = this;
     f.addEventListener('load', function () {
-      self.post({ tvp: 'config', adblock: BRIDGE ? BRIDGE.isAdblock() : true });
+      self.post({ tvp: 'config', adblock: BRIDGE ? BRIDGE.isAdblock() : true, clean: S.clean });
       self.kick(false);
     });
     this.stage.appendChild(f);
@@ -1488,9 +1517,16 @@ var Player = {
       self.timers.push(setTimeout(function () { if (!self.got) self.kick(ms === 4000 || ms === 8500); }, ms));
     });
     this.timers.push(setTimeout(function () {
+      if (!self.got && self.qTry && S.quality !== 'auto') {
+        self.qTry = false;
+        S.quality = 'auto'; saveS();
+        toast('Это качество недоступно — вернул автоматическое');
+        self.loadEp(self.t > 10 ? self.t : null);
+        return;
+      }
       if (!self.got) {
         self.load.classList.add('done');
-        toast('Видео не запускается? Нажмите OK или ↑ → «Плеер», чтобы выбрать другой', 6000);
+        toast('Видео не запускается? Нажмите ↓ → «Плеер» и выберите другой', 6000);
       }
     }, 12000));
   },
@@ -1500,6 +1536,7 @@ var Player = {
     if (forceT != null) resume = forceT;
     else if (h && h.ep === v.number && h.t > 15 && (!h.d || h.t < h.d - 60)) resume = h.t;
     var url = https(v.iframe_url);
+    if (/kodik/i.test(url) && S.quality !== 'auto') url = url.replace(/\/(\d{3,4})p(?=[?#/]|$)/, '/' + S.quality + 'p');
     if (/kodik/i.test(url) && resume > 0) url += (url.indexOf('?') < 0 ? '?' : '&') + 'start_from=' + Math.floor(resume);
     this.mount(url);
     this.resumeAt = resume;
@@ -1507,7 +1544,9 @@ var Player = {
     Hist.upd(this.a, { ep: v.number, dub: this.dub.name, player: this.player, t: resume, d: this.d || (h && h.ep === v.number ? h.d : 0) || 0 });
     $('.osd-title', this.el).textContent = this.a.title;
     $('.osd-sub', this.el).textContent = v.number + ' серия из ' + this.eps().length + ' · ' + shortDub(this.dub.name) + ' · ' + shortPlayer(this.player);
+    this.qlist = null;
     this.renderBar();
+    this.renderButtons();
   },
   post: function (m) { try { if (this.frame && this.frame.contentWindow) this.frame.contentWindow.postMessage(m, '*'); } catch (e) {} },
   cmd: function (c, v) {
@@ -1552,6 +1591,16 @@ var Player = {
       try { d = JSON.parse(d); } catch (x) { return; }
     }
     if (!d || typeof d !== 'object') return;
+    if (d.tvp === 'qlist') {
+      if (d.list && d.list.length) {
+        this.qlist = d.list;
+        if (this.sheetTab === 'quality' && this.panelOpen) {
+          var inSheet = !Nav.cur || !document.body.contains(Nav.cur) || this.sheet.contains(Nav.cur);
+          this.renderSheet('quality', !inSheet);
+        }
+      }
+      return;
+    }
     if (d.tvp === 'status') {
       if (d.d > 0 && d.d < 100 && this.d > 300) return; // an ad clip, not the episode
       this.status(d.t, d.d, d.paused, d.ended, d.buf);
@@ -1618,7 +1667,7 @@ var Player = {
     if (idle > 8000 && idle < 10000) this.cmd('play');
     if (idle > 15000 && !this.stallWarned) {
       this.stallWarned = true;
-      toast('Видео остановилось. ↑ → «Плеер» — попробуйте другой плеер или озвучку', 6000);
+      toast('Видео остановилось. ↓ → «Плеер» — попробуйте другой плеер', 6000);
     }
   },
   persist: function () {
@@ -1721,7 +1770,8 @@ var Player = {
     this.knob.style.left = (p * 100) + '%';
     $('.osd-cur', this.el).textContent = fmtT(shown);
     $('.osd-dur', this.el).textContent = this.d ? fmtT(this.d) : '--:--';
-    $('.osd-state', this.el).innerHTML = this.paused ? ICON.play : ICON.pause;
+    var pp = $('[data-b=pp]', this.btns);
+    if (pp) { var want = this.paused ? 'play' : 'pause'; if (pp.getAttribute('data-s') !== want) { pp.setAttribute('data-s', want); pp.innerHTML = ICON[want]; } }
   },
   showOsd: function (sticky) {
     this.osd.classList.add('show');
@@ -1731,25 +1781,36 @@ var Player = {
   hideOsdSoon: function () {
     var self = this;
     clearTimeout(this.osdT);
-    this.osdT = setTimeout(function () { if (!self.paused && !self.panelOpen) self.osd.classList.remove('show'); }, 3500);
+    this.osdT = setTimeout(function () {
+      if (self.panelOpen) { if (!self.paused && !Modal.open) self.closePanel(); return; }
+      if (!self.paused) self.osd.classList.remove('show');
+    }, self.panelOpen ? 6000 : 3500);
   },
   key: function (k, rep) {
+    this.lastRep = rep;
     if (this.cdTimer) {
       if (k === 'ok' && !rep) { this.go(this.idx + 1); return; }
       if (k === 'back' && !rep) { this.cancelCountdown(); return; }
     }
     if (this.panelOpen) {
-      if ((k === 'back' || k === 'menu') && !rep) { this.closePanel(); return; }
-      if (k === 'ok' && !rep) { activate(Nav.cur); return; }
-      if (k === 'up' || k === 'down' || k === 'left' || k === 'right') { Nav.move(k); return; }
-      return;
+      this.hideOsdSoon();
+      if ((k === 'back' || k === 'menu') && !rep) {
+        if (this.sheetTab) this.closeSheet(true); else this.closePanel();
+        return;
+      }
+      if (k === 'ok') { if (!rep) activate(Nav.cur); return; }
+      if (k === 'up' || k === 'down' || k === 'left' || k === 'right') {
+        if (k === 'down' && this.sheetTab && Nav.cur && this.sheet.contains(Nav.cur)) { Nav.focus(this.sheetBtn() || $('.pb-b', this.btns)); return; }
+        Nav.move(k);
+        return;
+      }
     }
     var step = rep < 6 ? 10 : rep < 20 ? 30 : 60;
     switch (k) {
       case 'ok':
         if (rep) return;
         if (this.skipMode) { this.doSkip(); return; }
-        if (!this.got && Date.now() - this.mountedAt < 15000) { this.kick(true); toast('Запускаю видео…', 1500); return; }
+        if (!this.got && Date.now() - this.mountedAt < 15000) { this.kick(true); return; }
         this.toggle();
         break;
       case 'playpause': case 'space': if (!rep) this.toggle(); break;
@@ -1757,81 +1818,115 @@ var Player = {
       case 'pause': this.pause(); break;
       case 'left': case 'rew': if (!this.raw || this.d) this.seekBy(-step); break;
       case 'right': case 'ff': if (!this.raw || this.d) this.seekBy(step); break;
-      case 'up': case 'menu': if (!rep && !this.raw) this.openPanel('eps'); break;
-      case 'down': case 'info':
-        if (rep) return;
-        if (this.osd.classList.contains('show') && !this.raw) this.openPanel('eps'); else this.showOsd(this.paused);
-        break;
+      case 'up': case 'down': case 'menu': case 'info': if (!rep) this.openPanel(); break;
       case 'next': if (!rep && !this.raw) this.go(this.idx + 1); break;
       case 'prev': if (!rep && !this.raw) this.go(this.idx - 1); break;
       case 'back': if (!rep) this.close(); break;
     }
   },
-  // ------------------------------------------------ side panel (episodes / dubbing / player / help)
+  // ------------------------------------------------ bottom controls (YouTube-style)
   openPanel: function (tab) {
     this.panelOpen = true;
-    this.panel.hidden = false;
+    this.osd.classList.add('show', 'ctrl');
     this.skipEl.classList.remove('show');
     this.skipMode = null;
-    this.showOsd(true);
-    this.renderPanel(tab || 'eps');
+    this.renderButtons();
+    if (tab && !this.raw) this.renderSheet(tab);
+    else Nav.focus($('[data-b=pp]', this.btns));
+    this.hideOsdSoon();
   },
   closePanel: function () {
     this.panelOpen = false;
-    this.panel.hidden = true;
+    this.closeSheet(false);
+    this.osd.classList.remove('ctrl');
     if (Nav.cur) Nav.cur.classList.remove('fx');
-    this.hideOsdSoon();
+    if (this.paused) this.showOsd(true); else this.hideOsdSoon();
   },
-  renderPanel: function (tab) {
-    var self = this;
-    var tabs = [['eps', 'Серии'], ['dub', 'Озвучка'], ['player', 'Плеер'], ['more', 'Ещё']];
-    this.panel.innerHTML = '<div class="ptabs" data-nav="row">' + tabs.map(function (t) {
-      return '<div class="chip f" data-tab="' + t[0] + '">' + t[1] + '</div>';
-    }).join('') + '</div><div class="pbody vs"></div>';
-    var row = $('.ptabs', this.panel);
-    $$('.ptabs .chip', this.panel).forEach(function (c) {
-      c._onFocus = function () { if (self.tab !== c.getAttribute('data-tab')) self.renderBody(c.getAttribute('data-tab')); };
-      c._ok = function () { Nav.focus($('.pbody .opt.sel', self.panel) || $('.pbody .ep.next', self.panel) || $('.pbody .f', self.panel) || c); };
+  sheetBtn: function () { return this.sheetTab ? $('[data-b="' + this.sheetTab + '"]', this.btns) : null; },
+  closeSheet: function (refocus) {
+    var b = this.sheetBtn();
+    this.sheetTab = null;
+    this.sheet.hidden = true;
+    this.sheetRow.innerHTML = '';
+    if (refocus && b) Nav.focus(b);
+  },
+  qualityOptions: function () {
+    if (this.kind === 'kodik') {
+      return [['auto', 'Авто'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['360', '360p']];
+    }
+    return (this.qlist || []).map(function (l) { return [l, l]; });
+  },
+  qualityLabel: function () {
+    if (this.kind === 'kodik') return S.quality === 'auto' ? 'Авто' : S.quality + 'p';
+    return this.qcur || 'Качество';
+  },
+  renderButtons: function () {
+    var self = this, html;
+    if (this.raw) {
+      html = '<div class="pb-b ic f" data-b="pp" data-s="' + (this.paused ? 'play' : 'pause') + '">' + (this.paused ? ICON.play : ICON.pause) + '</div>';
+    } else {
+      var v = this.cur(), n = this.eps().length;
+      html = '<div class="pb-b ic f" data-b="pp" data-s="' + (this.paused ? 'play' : 'pause') + '">' + (this.paused ? ICON.play : ICON.pause) + '</div>' +
+        '<div class="pb-b ic f' + (this.idx > 0 ? '' : ' dis') + '" data-b="prev">' + ICON.prev + '</div>' +
+        '<div class="pb-b ic f' + (this.idx < n - 1 ? '' : ' dis') + '" data-b="next">' + ICON.next + '</div>' +
+        '<div class="pb-b f" data-b="eps">' + ICON.list + '<span>' + esc(v.number) + ' серия</span></div>' +
+        '<div class="pb-b f" data-b="dub">' + ICON.mic2 + '<span>' + esc(shortDub(this.dub.name)) + '</span></div>' +
+        '<div class="pb-b f" data-b="player">' + ICON.tv + '<span>' + esc(shortPlayer(this.player)) + '</span></div>' +
+        '<div class="pb-b f" data-b="quality">' + ICON.hd + '<span>' + esc(this.qualityLabel()) + '</span></div>' +
+        '<div class="pb-b ic f" data-b="more">' + ICON.dots + '</div>';
+    }
+    var keep = Nav.cur && this.btns.contains(Nav.cur) ? Nav.cur.getAttribute('data-b') : null;
+    this.btns.innerHTML = html;
+    $$('.pb-b', this.btns).forEach(function (b) {
+      b._ok = function () {
+        var x = b.getAttribute('data-b');
+        if (x === 'pp') self.toggle();
+        else if (x === 'prev') { if (self.idx > 0) self.go(self.idx - 1); }
+        else if (x === 'next') { if (self.idx < self.eps().length - 1) self.go(self.idx + 1); }
+        else if (self.sheetTab === x) self.closeSheet(true);
+        else self.renderSheet(x);
+      };
     });
-    this.renderBody(tab);
-    row._last = $('[data-tab="' + tab + '"]', this.panel);
-    var target = tab === 'eps' ? $('.pgrid .ep.next', this.panel) : $('.pbody .opt.sel', this.panel);
-    Nav.focus(target || $('.pbody .f', this.panel) || row._last);
+    if (keep && this.panelOpen) Nav.focus($('[data-b="' + keep + '"]', this.btns) || $('.pb-b', this.btns), true);
   },
-  renderBody: function (tab) {
-    var self = this, body = $('.pbody', this.panel), html = '';
-    this.tab = tab;
-    $$('.ptabs .chip', this.panel).forEach(function (c) { c.classList.toggle('sel', c.getAttribute('data-tab') === tab); });
+  renderSheet: function (tab, keepFocus) {
+    var self = this, html = '';
+    this.sheetTab = tab;
+    if (tab === 'quality' && this.kind !== 'kodik' && !this.qlist) this.cmd('qlist');
     if (tab === 'eps') {
-      html += '<div class="ptitle">' + esc(shortDub(this.dub.name)) + ' · ' + esc(shortPlayer(this.player)) + '</div><div class="pgrid" data-nav="grid">' +
-        this.eps().map(function (v, i) {
-          var seen = Hist.seen(self.a.anime_id, v.number);
-          return '<div class="ep f' + (seen ? ' seen' : '') + (i === self.idx ? ' next' : '') + '" data-i="' + i + '"><b>' + esc(v.number) + '</b></div>';
-        }).join('') + '</div>';
+      html = this.eps().map(function (v, i) {
+        var seen = Hist.seen(self.a.anime_id, v.number);
+        return '<div class="ep f' + (seen ? ' seen' : '') + (i === self.idx ? ' next sel' : '') + '" data-i="' + i + '"><b>' + esc(v.number) + '</b></div>';
+      }).join('');
     } else if (tab === 'dub') {
       var num = this.cur().number;
-      html += '<div class="ptitle">Серия ' + esc(num) + ' продолжится с того же места</div><div data-nav="col">' + this.dubs.map(function (d, i) {
+      html = this.dubs.map(function (d, i) {
         var has = d.order.some(function (pn) { return d.players[pn].some(function (v) { return v.number === num; }); });
-        return '<div class="opt f' + (d === self.dub ? ' sel' : '') + '" data-d="' + i + '"><span class="ck"></span><span>' + esc(shortDub(d.name)) + '</span><span class="on">' +
-          (has ? d.count + ' эп.' : 'нет этой серии') + '</span></div>';
-      }).join('') + '</div>';
+        return '<div class="chip2 f' + (d === self.dub ? ' sel' : '') + (has ? '' : ' dis') + '" data-d="' + i + '">' + esc(shortDub(d.name)) +
+          '<small>' + (has ? d.count + ' эп.' : 'нет серии') + '</small></div>';
+      }).join('');
     } else if (tab === 'player') {
-      html += '<div class="ptitle">Если видео тормозит или не грузится — попробуйте другой плеер</div><div data-nav="col">' + this.dub.order.map(function (pn) {
-        return '<div class="opt f' + (pn === self.player ? ' sel' : '') + '" data-p="' + esc(pn) + '"><span class="ck"></span><span>' + esc(shortPlayer(pn)) + '</span><span class="on">' + self.dub.players[pn].length + ' эп.</span></div>';
-      }).join('') + '</div>';
-    } else {
-      html += '<div data-nav="col">' +
-        '<div class="opt f" data-m="reload"><span>Перезагрузить плеер</span></div>' +
-        '<div class="opt f" data-m="click"><span>Нажать «Play» внутри плеера</span></div>' +
-        '<div class="opt f" data-m="skipop"><span>Сразу пропускать опенинг</span><span class="on">' + (S.skipOp ? 'Вкл' : 'Выкл') + '</span></div>' +
-        '<div class="opt f" data-m="autonext"><span>Автоматически следующая серия</span><span class="on">' + (S.autoNext ? 'Вкл' : 'Выкл') + '</span></div>' +
-        '<div class="opt f" data-m="details"><span>Описание аниме</span></div>' +
-        '</div>';
+      html = this.dub.order.map(function (pn) {
+        return '<div class="chip2 f' + (pn === self.player ? ' sel' : '') + '" data-p="' + esc(pn) + '">' + esc(shortPlayer(pn)) + '<small>' + self.dub.players[pn].length + ' эп.</small></div>';
+      }).join('');
+    } else if (tab === 'quality') {
+      var opts = this.qualityOptions(), curQ = this.kind === 'kodik' ? S.quality : this.qcur;
+      html = opts.length ? opts.map(function (o) {
+        return '<div class="chip2 f' + (String(o[0]) === String(curQ) ? ' sel' : '') + '" data-q="' + esc(o[0]) + '">' + esc(o[1]) + '</div>';
+      }).join('') : '<div class="chip2 f sel" data-q="">Авто<small>плеер выбирает сам</small></div>';
+    } else if (tab === 'more') {
+      html = '<div class="chip2 f" data-m="skipop">Пропуск опенинга<small>' + (S.skipOp ? 'вкл' : 'выкл') + '</small></div>' +
+        '<div class="chip2 f" data-m="autonext">Автопереход<small>' + (S.autoNext ? 'вкл' : 'выкл') + '</small></div>' +
+        '<div class="chip2 f" data-m="clean">Интерфейс плеера<small>' + (S.clean ? 'скрыт' : 'виден') + '</small></div>' +
+        '<div class="chip2 f" data-m="reload">Перезагрузить</div>' +
+        '<div class="chip2 f" data-m="click">Нажать «Play» в плеере</div>' +
+        '<div class="chip2 f" data-m="details">Описание</div>';
     }
-    body.innerHTML = html;
-    body._t = 0; body.scrollTop = 0;
-    $$('.pgrid .ep', body).forEach(function (t) { t._ok = function () { self.closePanel(); self.go(+t.getAttribute('data-i')); }; });
-    $$('[data-d]', body).forEach(function (o) {
+    this.sheet.hidden = false;
+    this.sheetRow.innerHTML = html;
+    this.sheetRow._t = 0; this.sheetRow.scrollLeft = 0;
+    $$('.ep', this.sheetRow).forEach(function (t) { t._ok = function () { self.closePanel(); self.go(+t.getAttribute('data-i')); }; });
+    $$('[data-d]', this.sheetRow).forEach(function (o) {
       o._ok = function () {
         var d = self.dubs[+o.getAttribute('data-d')], num = self.cur().number, t = self.t;
         var pl = d.players[self.player] ? self.player : d.order[0];
@@ -1851,7 +1946,7 @@ var Player = {
         self.loadEp(t > 10 ? t : null);
       };
     });
-    $$('[data-p]', body).forEach(function (o) {
+    $$('[data-p]', this.sheetRow).forEach(function (o) {
       o._ok = function () {
         var pn = o.getAttribute('data-p'), num = self.cur().number, t = self.t, list = self.dub.players[pn], idx = 0;
         for (var i = 0; i < list.length; i++) if (list[i].number === num) { idx = i; break; }
@@ -1861,18 +1956,41 @@ var Player = {
         self.loadEp(t > 10 ? t : null);
       };
     });
-    $$('[data-m]', body).forEach(function (o) {
+    $$('[data-q]', this.sheetRow).forEach(function (o) {
+      o._ok = function () {
+        var q = o.getAttribute('data-q');
+        if (!q) { self.closeSheet(true); return; }
+        if (self.kind === 'kodik') {
+          if (q === S.quality) { self.closeSheet(true); return; }
+          S.quality = q; saveS();
+          self.persist();
+          var t = self.t;
+          self.closePanel();
+          self.loadEp(t > 3 ? t : null);
+          self.qTry = q !== 'auto';
+        } else {
+          self.qcur = q;
+          self.cmd('qset', q);
+          self.closePanel();
+          toast('Качество: ' + q);
+        }
+      };
+    });
+    $$('[data-m]', this.sheetRow).forEach(function (o) {
       o._ok = function () {
         var m = o.getAttribute('data-m');
         if (m === 'reload') { self.closePanel(); self.loadEp(self.t > 10 ? self.t : null); }
         else if (m === 'click') { self.closePanel(); self.kick(true); }
-        else if (m === 'skipop' || m === 'autonext') {
-          var key = m === 'skipop' ? 'skipOp' : 'autoNext';
+        else if (m === 'skipop' || m === 'autonext' || m === 'clean') {
+          var key = m === 'skipop' ? 'skipOp' : m === 'autonext' ? 'autoNext' : 'clean';
           S[key] = !S[key]; saveS();
-          self.renderBody('more'); Nav.focus($('[data-m="' + m + '"]', self.panel));
+          if (m === 'clean') self.post({ tvp: 'config', adblock: BRIDGE ? BRIDGE.isAdblock() : true, clean: S.clean });
+          self.renderSheet('more'); Nav.focus($('[data-m="' + m + '"]', self.sheetRow));
         } else if (m === 'details') { textBox(self.a.title, self.a.description || ''); }
       };
     });
+    this.renderButtons();
+    if (!keepFocus) Nav.focus($('.sel', this.sheetRow) || $('.f', this.sheetRow));
   },
   close: function () {
     this.setBuf(false);
@@ -1883,7 +2001,8 @@ var Player = {
     if (this.frame) { this.frame.src = 'about:blank'; this.frame.remove(); this.frame = null; }
     this.open = false;
     this.panelOpen = false;
-    this.panel.hidden = true;
+    this.closeSheet(false);
+    this.osd.classList.remove('ctrl');
     this.el.hidden = true;
     this.osd.classList.remove('show');
     document.body.classList.remove('playing');

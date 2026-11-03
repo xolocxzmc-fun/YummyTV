@@ -11,16 +11,49 @@
     if (location.hostname === 'old.yummyani.me' && location.pathname.indexOf('/tvapp/') === 0) return;
   } catch (e) { return; }
 
-  var cfg = { adblock: true };
+  var cfg = { adblock: true, clean: true };
   var lastPost = 0;
 
   // No pop-ups and no cursor inside players.
   try { window.open = function () { return null; }; } catch (e) {}
-  try {
-    var st = document.createElement('style');
-    st.textContent = '*{cursor:none!important}';
-    (document.head || document.documentElement).appendChild(st);
-  } catch (e) {}
+  // At document start the page may not even have <html> yet: attach styles as soon as it exists.
+  function addStyle(css) {
+    var el = document.createElement('style');
+    el.textContent = css;
+    function attach() {
+      var root = document.head || document.documentElement;
+      if (!root) return false;
+      root.appendChild(el);
+      return true;
+    }
+    if (!attach()) {
+      var mo = new MutationObserver(function () { if (attach()) mo.disconnect(); });
+      mo.observe(document, { childList: true, subtree: true });
+    }
+    // keep our style last so the player's own CSS can't override it
+    document.addEventListener('DOMContentLoaded', function () {
+      if (el.parentNode && document.head && el.parentNode !== document.head) document.head.appendChild(el);
+    });
+    return el;
+  }
+  addStyle('*{cursor:none!important}');
+
+  // The app draws its own controls: hide the player's interface, keep only the picture and subtitles.
+  var CLEAN_CSS = 'html,body{background:#000!important}' +
+    'body *{visibility:hidden!important;transition:none!important}' +
+    'video,iframe,[class*="subtitle"],[class*="subtitle"] *,[class*="Subtitle"],[class*="Subtitle"] *,' +
+    '[class*="caption"],[class*="caption"] *,[class*="text-track"],[class*="text-track"] *,[class*="cue"],[class*="cue"] *,' +
+    '[id*="subtitle"],[id*="subtitle"] *{visibility:visible!important}' +
+    'video::-webkit-media-controls{display:none!important}';
+  var cleanEl = null;
+  function setClean(on) {
+    try {
+      if (on && !cleanEl) {
+        cleanEl = addStyle(CLEAN_CSS);
+      } else if (!on && cleanEl) { cleanEl.remove(); cleanEl = null; }
+    } catch (e) {}
+  }
+  setClean(true);
 
   function videos() { return document.getElementsByTagName('video'); }
 
@@ -40,7 +73,7 @@
     var r = el.getBoundingClientRect();
     if (r.width < 4 || r.height < 4) return false;
     var cs = window.getComputedStyle(el);
-    return cs.visibility !== 'hidden' && cs.display !== 'none' && cs.opacity !== '0';
+    return cs.display !== 'none' && (cleanEl || (cs.visibility !== 'hidden' && cs.opacity !== '0'));
   }
 
   function fire(el) {
@@ -80,6 +113,25 @@
       if (t && t.length < 40 && SKIP_RE.test(t) && visible(el)) { fire(el); return true; }
     }
     return false;
+  }
+
+  var Q_RE = /^\s*(\d{3,4})\s*p\b/i;
+  function qualityItems() {
+    var els = document.querySelectorAll('li, button, a, div, span, pjsdiv'), seen = {}, out = [];
+    for (var i = 0; i < els.length && i < 6000; i++) {
+      var el = els[i];
+      if (el.children.length > 2) continue;
+      var t = (el.textContent || '').trim();
+      if (t.length > 14) continue;
+      var m = t.match(Q_RE);
+      if (!m) continue;
+      var label = m[1] + 'p';
+      if (seen[label]) continue;
+      seen[label] = 1;
+      out.push({ label: label, el: el });
+    }
+    out.sort(function (a, b) { return parseInt(b.label, 10) - parseInt(a.label, 10); });
+    return out;
   }
 
   function forward(msg) {
@@ -133,6 +185,15 @@
       case 'status':
         status(true);
         return !!v;
+      case 'qlist':
+        var q = qualityItems();
+        if (!q.length) return false;
+        try { window.top.postMessage({ tvp: 'qlist', list: q.map(function (x) { return x.label; }) }, '*'); } catch (e) {}
+        return true;
+      case 'qset':
+        var items = qualityItems();
+        for (var i = 0; i < items.length; i++) if (items[i].label === value) { fire(items[i].el); return true; }
+        return false;
     }
     return false;
   }
@@ -140,7 +201,7 @@
   window.addEventListener('message', function (e) {
     var m = e.data;
     if (!m || typeof m !== 'object' || !m.tvp) return;
-    if (m.tvp === 'config') { cfg = m; forward(m); return; }
+    if (m.tvp === 'config') { cfg = m; setClean(m.clean !== false); forward(m); return; }
     if (m.tvp !== 'cmd') return;
     var handled = run(m.cmd, m.value);
     if (!handled || !mainVideo()) forward(m);

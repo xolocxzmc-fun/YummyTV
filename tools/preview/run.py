@@ -5,6 +5,8 @@ WEB = os.path.join(HERE, '..', '..', 'app', 'src', 'main', 'assets', 'web')
 OUT = sys.argv[1] if len(sys.argv) > 1 and __name__ == '__main__' else 'shots'
 FAKE_PLAYER = '''<!doctype html><html><body style="margin:0;background:#000">
 <video id=v src="https://old.yummyani.me/__video.webm" style="width:100vw;height:100vh;object-fit:cover" playsinline></video>
+<div class="native-controls" style="position:absolute;left:0;right:0;bottom:0;height:90px;background:#e00;color:#fff;font:40px sans-serif">NATIVE UI</div>
+<ul class="q-menu" style="display:none"><li onclick="window.__q='1080p'">1080p</li><li onclick="window.__q='720p'">720p</li><li onclick="window.__q='480p'">480p</li></ul>
 <div class="play_button" style="position:absolute;left:50%;top:50%;width:80px;height:80px;margin:-40px;border-radius:50%;background:#fff3"
  onclick="document.getElementById('v').play();this.remove()"></div></body></html>'''
 now = int(time.time() * 1000)
@@ -120,16 +122,11 @@ async def main():
         await pg.wait_for_timeout(4200)
         await shot('16_player_skip', 0)
         sm = await pg.evaluate("__ytv.Player.skipMode"); print('skipMode', sm)
-        await key('up', wait=500)
+        await key('down', wait=400)
         await shot('17_player_panel')
-        await key('up')
-        tab = await pg.evaluate("__ytv.Nav.cur.getAttribute('data-tab')"); print('tab after up', tab)
-        while tab != 'dub':
-            await key('left' if tab in ('player','more') else 'right')
-            tab = await pg.evaluate("__ytv.Nav.cur.getAttribute('data-tab')")
-        await key('down', wait=300)
+        await pg.evaluate("__ytv.Player.renderSheet('dub')"); await pg.wait_for_timeout(300)
         await shot('18_player_panel_dub')
-        await key('down'); await key('ok', wait=1500)
+        await key('right'); await key('ok', wait=1500)
         info = await pg.evaluate("({dub:__ytv.Player.dub.name, ep:__ytv.Player.cur().number, t:__ytv.Player.t})"); print('after dub switch', info)
         await pg.wait_for_timeout(2500)
         await pg.evaluate("__ytv.Player.seekTo(147)"); await pg.wait_for_timeout(4500)
