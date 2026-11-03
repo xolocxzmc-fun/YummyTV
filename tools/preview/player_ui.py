@@ -14,7 +14,9 @@ async def main():
         k = lambda key: pg.evaluate("k=>tvKey(k,0)", key)
         await pg.goto('https://old.yummyani.me/tvapp/index.html'); await pg.wait_for_timeout(800)
         await pg.evaluate("__ytv.Router.push('anime',{url:'velikiy-pritvorschik'})"); await pg.wait_for_timeout(800)
-        await k('ok'); await pg.wait_for_timeout(3000)
+        await k('ok'); await pg.wait_for_timeout(5000)
+        fr = [f for f in pg.frames if 'kodik' in f.url][0]
+        print('auto quality picked inside player:', await fr.evaluate("window.__q"), '| app shows:', await pg.evaluate("__ytv.Player.qcur"), await pg.evaluate("__ytv.Player.qlist"))
         await k('ok'); await pg.wait_for_timeout(700)   # pause
         await pg.screenshot(path='shots/p1_paused.png')
         fr = [f for f in pg.frames if 'kodik' in f.url][0]
@@ -26,13 +28,17 @@ async def main():
         await pg.screenshot(path='shots/p2_controls.png')
         for _ in range(6): await k('right')
         print('on button:', await pg.evaluate("__ytv.Nav.cur.getAttribute('data-b')"))
-        await k('ok'); await pg.wait_for_timeout(300)
+        await k('ok'); await pg.wait_for_timeout(500)
         await pg.screenshot(path='shots/p3_quality.png')
-        await k('right'); await k('right'); await k('right')
-        print('quality chip:', await pg.evaluate("__ytv.Nav.cur.textContent"))
-        await k('ok'); await pg.wait_for_timeout(2500)
-        src = await pg.evaluate("__ytv.Player.frame.src"); print('player url after quality change:', src)
-        print('resumed at', round(await pg.evaluate("__ytv.Player.t"), 1))
+        print('quality chips:', await pg.evaluate("[...document.querySelectorAll('.sheet-row .chip2')].map(e=>e.textContent)"))
+        await k('right'); await k('right')
+        print('chip:', await pg.evaluate("__ytv.Nav.cur.textContent"))
+        await k('ok'); await pg.wait_for_timeout(600)
+        print('inside player now:', await fr.evaluate("window.__q"), '| saved setting:', await pg.evaluate("JSON.parse(localStorage.getItem('ytv.settings')).quality"))
+        await k('ok'); await pg.wait_for_timeout(300)
+        await pg.evaluate("__ytv.Player.go(1)"); await pg.wait_for_timeout(5000)
+        fr = [f for f in pg.frames if 'kodik' in f.url][0]
+        print('next episode keeps preference ->', await fr.evaluate("window.__q"))
         await k('down'); await k('right'); await k('right'); await k('right')
         print('on button:', await pg.evaluate("__ytv.Nav.cur.getAttribute('data-b')"))
         await k('ok'); await pg.wait_for_timeout(300)
@@ -51,7 +57,7 @@ async def main():
         print('qualities from inside player:', await pg.evaluate("[...document.querySelectorAll('.sheet-row .chip2')].map(e=>e.textContent)"))
         await k('ok'); await pg.wait_for_timeout(300)
         fr2 = [f for f in pg.frames if 'alloha' in f.url][0]
-        print('clicked inside player:', await fr2.evaluate("window.__q"))
+        print('picked inside second player:', await fr2.evaluate("window.__q"))
         print('errors:', errs)
         await b.close()
 asyncio.run(main())

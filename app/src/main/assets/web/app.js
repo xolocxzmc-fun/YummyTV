@@ -1377,7 +1377,7 @@ Views.settings = {
       ['skipOp', 'Сразу пропускать опенинг', S.skipOp ? 'Вкл' : 'Выкл'],
       ['adblock', 'Блокировать рекламу в плеерах', ad ? 'Вкл' : 'Выкл'],
       ['player', 'Предпочитаемый плеер', S.player === 'auto' ? 'Авто (Kodik)' : S.player],
-      ['quality', 'Качество видео (Kodik)', S.quality === 'auto' ? 'Авто' : S.quality + 'p'],
+      ['quality', 'Качество видео', S.quality === 'auto' ? 'Лучшее доступное' : 'до ' + S.quality + 'p'],
       ['clean', 'Скрывать интерфейс встроенного плеера', S.clean ? 'Вкл' : 'Выкл'],
       ['scale', 'Размер интерфейса', Math.round(S.scale * 100) + '%'],
       ['anim', 'Анимации и плавная прокрутка', S.anim ? 'Вкл' : 'Выкл'],
@@ -1395,7 +1395,7 @@ Views.settings = {
     var self = this;
     function rerender() { var k = x; self.render(self.el); Nav.focus($('[data-x="' + k + '"]', self.el)); }
     if (x === 'quality') {
-      pick('Качество видео', [['auto', 'Авто'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['360', '360p']].map(function (o) { return { v: o[0], t: o[1] }; }),
+      pick('Качество видео', [['auto', 'Лучшее доступное'], ['1080', 'До 1080p'], ['720', 'До 720p'], ['480', 'До 480p'], ['360', 'До 360p']].map(function (o) { return { v: o[0], t: o[1] }; }),
         { selected: [S.quality], checks: true, onPick: function (v) { S.quality = v; saveS(); rerender(); } });
       return;
     }
@@ -1517,13 +1517,6 @@ var Player = {
       self.timers.push(setTimeout(function () { if (!self.got) self.kick(ms === 4000 || ms === 8500); }, ms));
     });
     this.timers.push(setTimeout(function () {
-      if (!self.got && self.qTry && S.quality !== 'auto') {
-        self.qTry = false;
-        S.quality = 'auto'; saveS();
-        toast('Это качество недоступно — вернул автоматическое');
-        self.loadEp(self.t > 10 ? self.t : null);
-        return;
-      }
       if (!self.got) {
         self.load.classList.add('done');
         toast('Видео не запускается? Нажмите ↓ → «Плеер» и выберите другой', 6000);
@@ -1536,7 +1529,6 @@ var Player = {
     if (forceT != null) resume = forceT;
     else if (h && h.ep === v.number && h.t > 15 && (!h.d || h.t < h.d - 60)) resume = h.t;
     var url = https(v.iframe_url);
-    if (/kodik/i.test(url) && S.quality !== 'auto') url = url.replace(/\/(\d{3,4})p(?=[?#/]|$)/, '/' + S.quality + 'p');
     if (/kodik/i.test(url) && resume > 0) url += (url.indexOf('?') < 0 ? '?' : '&') + 'start_from=' + Math.floor(resume);
     this.mount(url);
     this.resumeAt = resume;
@@ -1544,7 +1536,7 @@ var Player = {
     Hist.upd(this.a, { ep: v.number, dub: this.dub.name, player: this.player, t: resume, d: this.d || (h && h.ep === v.number ? h.d : 0) || 0 });
     $('.osd-title', this.el).textContent = this.a.title;
     $('.osd-sub', this.el).textContent = v.number + ' серия из ' + this.eps().length + ' · ' + shortDub(this.dub.name) + ' · ' + shortPlayer(this.player);
-    this.qlist = null;
+    this.qlist = null; this.qcur = null; this.qApplied = 0;
     this.renderBar();
     this.renderButtons();
   },
@@ -1592,11 +1584,16 @@ var Player = {
     }
     if (!d || typeof d !== 'object') return;
     if (d.tvp === 'qlist') {
+      var changed = (d.list || []).join() !== (this.qlist || []).join() || (d.cur && d.cur !== this.qcur);
+      if (d.cur) this.qcur = d.cur;
       if (d.list && d.list.length) {
         this.qlist = d.list;
+        this.qApplied = this.qApplied || 1;
+        if (!changed) return;
+        if (this.panelOpen) this.renderButtons();
         if (this.sheetTab === 'quality' && this.panelOpen) {
           var inSheet = !Nav.cur || !document.body.contains(Nav.cur) || this.sheet.contains(Nav.cur);
-          this.renderSheet('quality', !inSheet);
+          this.renderSheet('quality', !inSheet, true);
         }
       }
       return;
@@ -1637,6 +1634,7 @@ var Player = {
     this.t = t; this.paused = !!paused;
     if (!this.got && (t > 0.5 || !paused)) {
       this.got = true;
+      this.applyQuality();
       this.load.classList.add('done');
       this.hideOsdSoon();
     }
@@ -1651,6 +1649,18 @@ var Player = {
     if (!this.ended && (ended || (this.d > 60 && t >= this.d - 1.2 && this.got))) { this.ended = true; this.onEnded(); }
     this.renderBar();
     this.saveProg();
+  },
+  // Players start at a low quality (Kodik: 360p). Pick the preferred one from the player's own menu.
+  applyQuality: function () {
+    if (this.raw) return;
+    var self = this, mount = this.mountedAt;
+    [0, 2500, 6000].forEach(function (ms) {
+      self.timers.push(setTimeout(function () {
+        if (self.mountedAt !== mount || !self.open) return;
+        if (ms && self.qApplied) return;
+        self.cmd('qpick', S.quality || 'auto');
+      }, ms));
+    });
   },
   setBuf: function (on) {
     if (on === this.buf) return;
@@ -1851,14 +1861,11 @@ var Player = {
     if (refocus && b) Nav.focus(b);
   },
   qualityOptions: function () {
-    if (this.kind === 'kodik') {
-      return [['auto', 'Авто'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['360', '360p']];
-    }
-    return (this.qlist || []).map(function (l) { return [l, l]; });
+    if (!this.qlist || !this.qlist.length) return [];
+    return [['auto', 'Лучшее']].concat(this.qlist.map(function (l) { return [String(parseInt(l, 10)), l]; }));
   },
   qualityLabel: function () {
-    if (this.kind === 'kodik') return S.quality === 'auto' ? 'Авто' : S.quality + 'p';
-    return this.qcur || 'Качество';
+    return this.qcur || (S.quality === 'auto' ? 'Лучшее' : S.quality + 'p');
   },
   renderButtons: function () {
     var self = this, html;
@@ -1889,10 +1896,10 @@ var Player = {
     });
     if (keep && this.panelOpen) Nav.focus($('[data-b="' + keep + '"]', this.btns) || $('.pb-b', this.btns), true);
   },
-  renderSheet: function (tab, keepFocus) {
+  renderSheet: function (tab, keepFocus, fromPlayer) {
     var self = this, html = '';
     this.sheetTab = tab;
-    if (tab === 'quality' && this.kind !== 'kodik' && !this.qlist) this.cmd('qlist');
+    if (tab === 'quality' && !fromPlayer) this.cmd('qlist');
     if (tab === 'eps') {
       html = this.eps().map(function (v, i) {
         var seen = Hist.seen(self.a.anime_id, v.number);
@@ -1910,10 +1917,11 @@ var Player = {
         return '<div class="chip2 f' + (pn === self.player ? ' sel' : '') + '" data-p="' + esc(pn) + '">' + esc(shortPlayer(pn)) + '<small>' + self.dub.players[pn].length + ' эп.</small></div>';
       }).join('');
     } else if (tab === 'quality') {
-      var opts = this.qualityOptions(), curQ = this.kind === 'kodik' ? S.quality : this.qcur;
+      var opts = this.qualityOptions(), curQ = S.quality || 'auto';
       html = opts.length ? opts.map(function (o) {
-        return '<div class="chip2 f' + (String(o[0]) === String(curQ) ? ' sel' : '') + '" data-q="' + esc(o[0]) + '">' + esc(o[1]) + '</div>';
-      }).join('') : '<div class="chip2 f sel" data-q="">Авто<small>плеер выбирает сам</small></div>';
+        var label = o[0] === 'auto' && self.qlist ? o[1] + '<small>' + esc(self.qlist[0]) + '</small>' : esc(o[1]);
+        return '<div class="chip2 f' + (String(o[0]) === String(curQ) ? ' sel' : '') + '" data-q="' + esc(o[0]) + '">' + label + '</div>';
+      }).join('') : '<div class="chip2 f sel" data-q="">Авто<small>' + (this.got ? 'плеер выбирает сам' : 'загрузка…') + '</small></div>';
     } else if (tab === 'more') {
       html = '<div class="chip2 f" data-m="skipop">Пропуск опенинга<small>' + (S.skipOp ? 'вкл' : 'выкл') + '</small></div>' +
         '<div class="chip2 f" data-m="autonext">Автопереход<small>' + (S.autoNext ? 'вкл' : 'выкл') + '</small></div>' +
@@ -1960,20 +1968,10 @@ var Player = {
       o._ok = function () {
         var q = o.getAttribute('data-q');
         if (!q) { self.closeSheet(true); return; }
-        if (self.kind === 'kodik') {
-          if (q === S.quality) { self.closeSheet(true); return; }
-          S.quality = q; saveS();
-          self.persist();
-          var t = self.t;
-          self.closePanel();
-          self.loadEp(t > 3 ? t : null);
-          self.qTry = q !== 'auto';
-        } else {
-          self.qcur = q;
-          self.cmd('qset', q);
-          self.closePanel();
-          toast('Качество: ' + q);
-        }
+        S.quality = q; saveS();
+        self.cmd('qpick', q);
+        self.closePanel();
+        toast('Качество: ' + (q === 'auto' ? 'лучшее' : q + 'p'));
       };
     });
     $$('[data-m]', this.sheetRow).forEach(function (o) {

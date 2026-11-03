@@ -115,23 +115,42 @@
     return false;
   }
 
-  var Q_RE = /^\s*(\d{3,4})\s*p\b/i;
-  function qualityItems() {
-    var els = document.querySelectorAll('li, button, a, div, span, pjsdiv'), seen = {}, out = [];
-    for (var i = 0; i < els.length && i < 6000; i++) {
+  // Quality menu inside the player: elements whose text starts with "720p", "1080p", "480p HD"...
+  var Q_RE = /^\s*(\d{3,4})\s*p/i;
+  function qualityMenu() {
+    var els = document.querySelectorAll('li, button, a, div, span, pjsdiv'), all = [];
+    for (var i = 0; i < els.length && i < 8000; i++) {
       var el = els[i];
-      if (el.children.length > 2) continue;
-      var t = (el.textContent || '').trim();
-      if (t.length > 14) continue;
+      if (el.children.length > 3) continue;
+      var t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t.length > 16) continue;
       var m = t.match(Q_RE);
-      if (!m) continue;
-      var label = m[1] + 'p';
-      if (seen[label]) continue;
-      seen[label] = 1;
-      out.push({ label: label, el: el });
+      if (m) all.push({ el: el, n: parseInt(m[1], 10), label: m[1] + 'p' });
     }
-    out.sort(function (a, b) { return parseInt(b.label, 10) - parseInt(a.label, 10); });
-    return out;
+    if (!all.length) return null;
+    // drop wrappers whose match comes only from a matching child
+    all = all.filter(function (x) { return !all.some(function (y) { return y !== x && x.el.contains(y.el); }); });
+    // the menu = the parent holding the most quality entries; a lone match elsewhere is the "current quality" button
+    var groups = [], best = null;
+    all.forEach(function (x) {
+      var g = null;
+      for (var k = 0; k < groups.length; k++) if (groups[k].p === x.el.parentNode) g = groups[k];
+      if (!g) { g = { p: x.el.parentNode, items: [] }; groups.push(g); }
+      g.items.push(x);
+    });
+    groups.forEach(function (g) { if (!best || g.items.length > best.items.length) best = g; });
+    var items = best.items.length >= 2 ? best.items : all;
+    var seen = {}, uniq = [];
+    items.forEach(function (x) { if (!seen[x.label]) { seen[x.label] = 1; uniq.push(x); } });
+    uniq.sort(function (a, b) { return b.n - a.n; });
+    var cur = null;
+    all.forEach(function (x) { if (items.indexOf(x) < 0) cur = x.label; });
+    return { items: uniq, cur: cur };
+  }
+  function postQ(menu, picked) {
+    try {
+      window.top.postMessage({ tvp: 'qlist', list: menu.items.map(function (x) { return x.label; }), cur: picked || menu.cur }, '*');
+    } catch (e) {}
   }
 
   function forward(msg) {
@@ -186,13 +205,25 @@
         status(true);
         return !!v;
       case 'qlist':
-        var q = qualityItems();
-        if (!q.length) return false;
-        try { window.top.postMessage({ tvp: 'qlist', list: q.map(function (x) { return x.label; }) }, '*'); } catch (e) {}
+        var ql = qualityMenu();
+        if (!ql) return false;
+        postQ(ql);
+        return true;
+      case 'qpick': // value: 'auto' = best available, or a number like 480 = best not above it
+        var qm = qualityMenu();
+        if (!qm || !qm.items.length) return false;
+        var target = qm.items[0];
+        if (value && value !== 'auto') {
+          var lim = parseInt(value, 10);
+          target = qm.items.filter(function (x) { return x.n <= lim; })[0] || qm.items[qm.items.length - 1];
+        }
+        if (target.label !== qm.cur) fire(target.el);
+        postQ(qm, target.label);
         return true;
       case 'qset':
-        var items = qualityItems();
-        for (var i = 0; i < items.length; i++) if (items[i].label === value) { fire(items[i].el); return true; }
+        var qs2 = qualityMenu();
+        if (!qs2) return false;
+        for (var i = 0; i < qs2.items.length; i++) if (qs2.items[i].label === value) { fire(qs2.items[i].el); postQ(qs2, value); return true; }
         return false;
     }
     return false;

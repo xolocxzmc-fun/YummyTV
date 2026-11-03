@@ -6,7 +6,8 @@ OUT = sys.argv[1] if len(sys.argv) > 1 and __name__ == '__main__' else 'shots'
 FAKE_PLAYER = '''<!doctype html><html><body style="margin:0;background:#000">
 <video id=v src="https://old.yummyani.me/__video.webm" style="width:100vw;height:100vh;object-fit:cover" playsinline></video>
 <div class="native-controls" style="position:absolute;left:0;right:0;bottom:0;height:90px;background:#e00;color:#fff;font:40px sans-serif">NATIVE UI</div>
-<ul class="q-menu" style="display:none"><li onclick="window.__q='1080p'">1080p</li><li onclick="window.__q='720p'">720p</li><li onclick="window.__q='480p'">480p</li></ul>
+<div class="quality-btn" style="position:absolute;right:20px;bottom:20px">360p</div>
+<ul class="q-menu" style="display:none"><li onclick="window.__q='720p';document.querySelector('.quality-btn').textContent='720p'">720p<sup>HD</sup></li><li onclick="window.__q='480p';document.querySelector('.quality-btn').textContent='480p'">480p</li><li onclick="window.__q='360p';document.querySelector('.quality-btn').textContent='360p'">360p</li></ul>
 <div class="play_button" style="position:absolute;left:50%;top:50%;width:80px;height:80px;margin:-40px;border-radius:50%;background:#fff3"
  onclick="document.getElementById('v').play();this.remove()"></div></body></html>'''
 now = int(time.time() * 1000)
